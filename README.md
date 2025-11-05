@@ -14,8 +14,7 @@ This monorepo contains two packages:
 ### Installation
 
 ```bash
-pnpm install
-pnpm build
+pnpm i -g code-grader
 ```
 
 ### CLI Usage
@@ -23,7 +22,7 @@ pnpm build
 Grade multiple submissions:
 
 ```bash
-npx code-grader --policy examples/grading-policy \
+code-grader --policy examples/grading-policy \
   --submissions examples/submission1 examples/submission2 \
   --output results.jsonl
 ```
@@ -31,7 +30,7 @@ npx code-grader --policy examples/grading-policy \
 Export to CSV:
 
 ```bash
-npx code-grader --policy examples/grading-policy \
+code-grader --policy examples/grading-policy \
   --submissions examples/submission1 examples/submission2 \
   --output results.csv
 ```

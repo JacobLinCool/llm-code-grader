@@ -70,9 +70,15 @@ importers:
 
   packages/web:
     dependencies:
+      '@google/genai':
+        specifier: ^1.28.0
+        version: 1.28.0
       '@lucide/svelte':
         specifier: ^0.552.0
         version: 0.552.0(svelte@5.43.3)
+      code-grader-core:
+        specifier: workspace:*
+        version: link:../code-grader-core
       flowbite-svelte:
         specifier: ^1.23.0
         version: 1.23.0(rollup@4.52.5)(svelte@5.43.3)(tailwindcss@4.1.16)

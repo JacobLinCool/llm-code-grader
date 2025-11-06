@@ -1,16 +1,32 @@
 <script lang="ts">
-	import { Button, Heading, Alert, Spinner, Label, Fileupload } from 'flowbite-svelte';
+	import { Button, Heading, Alert, Spinner, Label, Fileupload, Textarea } from 'flowbite-svelte';
 	import { Upload, CheckCircle, AlertCircle, ArrowLeft } from '@lucide/svelte';
 	import JSZip from 'jszip';
 
 	let files = $state<FileList | undefined>();
+	let gradingPolicy = $state('');
 	let processing = $state(false);
-	let result = $state<{ success: boolean; message: string } | null>(null);
+	let result = $state<{ 
+		success: boolean; 
+		message?: string;
+		score?: number;
+		scoringDetails?: string;
+		usage?: {
+			totalTokenCount: number;
+			promptTokenCount: number;
+			candidatesTokenCount: number;
+		}
+	} | null>(null);
 	let processedFiles = $state<{ path: string; content: string }[]>([]);
 
 	async function handleSubmit() {
 		if (!files || files.length === 0) {
 			result = { success: false, message: 'Please select a file' };
+			return;
+		}
+
+		if (!gradingPolicy.trim()) {
+			result = { success: false, message: 'Please provide a grading policy' };
 			return;
 		}
 
@@ -42,23 +58,29 @@
 
 			await Promise.all(filePromises);
 
-			// Send to API
+			// Send to API with grading policy
 			const response = await fetch('/api/grade', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({ files: processedFiles })
+				body: JSON.stringify({ 
+					files: processedFiles,
+					gradingPolicy: gradingPolicy.trim()
+				})
 			});
 
 			if (response.ok) {
 				const data = await response.json();
 				result = {
 					success: true,
-					message: `Successfully processed ${processedFiles.length} files. ${data.message || ''}`
+					score: data.score,
+					scoringDetails: data.scoringDetails,
+					usage: data.usage
 				};
 			} else {
-				throw new Error(`Server returned ${response.status}`);
+				const errorData = await response.json().catch(() => ({}));
+				throw new Error(errorData.message || `Server returned ${response.status}`);
 			}
 		} catch (error) {
 			result = {
@@ -95,6 +117,23 @@
 		<div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
 			<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-6">
 				<div>
+					<Label for="grading-policy" class="mb-2 text-lg font-semibold">
+						Grading Policy
+					</Label>
+					<Textarea
+						id="grading-policy"
+						bind:value={gradingPolicy}
+						placeholder="Enter the grading rubric and instructions here...&#10;&#10;Example:&#10;- Code quality: 30 points&#10;- Functionality: 40 points&#10;- Documentation: 20 points&#10;- Testing: 10 points"
+						rows="6"
+						disabled={processing}
+						class="w-full"
+					/>
+					<p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+						Provide the grading rubric and instructions for the AI to evaluate submissions
+					</p>
+				</div>
+
+				<div>
 					<Label for="file-upload" class="mb-2 text-lg font-semibold">
 						Select ZIP File
 					</Label>
@@ -112,29 +151,44 @@
 
 				<Button
 					type="submit"
-					disabled={processing || !files || files.length === 0}
+					disabled={processing || !files || files.length === 0 || !gradingPolicy.trim()}
 					size="lg"
 					class="w-full gap-2"
 				>
 					{#if processing}
 						<Spinner size="4" />
-						Processing...
+						Grading...
 					{:else}
 						<Upload class="w-5 h-5" />
-						Upload and Process
+						Grade Submission
 					{/if}
 				</Button>
 			</form>
 
-			<!-- Result Alert -->
+			<!-- Result Display -->
 			{#if result}
-				<div class="mt-6">
-					{#if result.success}
-						<Alert color="green" class="flex items-center gap-2">
-							<CheckCircle class="w-5 h-5 flex-shrink-0" />
-							<span>{result.message}</span>
+				<div class="mt-6 space-y-4">
+					{#if result.success && result.score !== undefined}
+						<Alert color="green" class="flex items-start gap-3">
+							<CheckCircle class="w-5 h-5 flex-shrink-0 mt-0.5" />
+							<div class="flex-1">
+								<div class="font-semibold text-lg mb-2">
+									Score: {result.score}/100
+								</div>
+								{#if result.scoringDetails}
+									<div class="text-sm whitespace-pre-wrap">
+										{result.scoringDetails}
+									</div>
+								{/if}
+								{#if result.usage}
+									<div class="text-xs mt-3 pt-3 border-t border-green-200 dark:border-green-800">
+										Tokens used: {result.usage.totalTokenCount} 
+										(prompt: {result.usage.promptTokenCount}, response: {result.usage.candidatesTokenCount})
+									</div>
+								{/if}
+							</div>
 						</Alert>
-					{:else}
+					{:else if !result.success}
 						<Alert color="red" class="flex items-center gap-2">
 							<AlertCircle class="w-5 h-5 flex-shrink-0" />
 							<span>{result.message}</span>
@@ -157,10 +211,11 @@
 		<div class="mt-8 p-6 bg-blue-50 dark:bg-gray-700 rounded-lg">
 			<Heading tag="h3" class="mb-4 text-xl font-bold">Instructions</Heading>
 			<ul class="space-y-2 text-gray-700 dark:text-gray-300">
-				<li>• Your ZIP file should contain code files for grading</li>
-				<li>• Processing happens entirely in your browser for privacy</li>
-				<li>• Only parsed file contents are sent to the server</li>
-				<li>• Supported file types: All text-based code files</li>
+				<li>• Provide a detailed grading policy with rubric and evaluation criteria</li>
+				<li>• Upload a ZIP file containing the code submission to grade</li>
+				<li>• ZIP processing happens entirely in your browser for privacy</li>
+				<li>• The AI will evaluate the code according to your grading policy</li>
+				<li>• Results include a score (0-100) and detailed feedback</li>
 			</ul>
 		</div>
 	</div>
